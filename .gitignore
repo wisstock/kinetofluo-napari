@@ -1,0 +1,15 @@
+# Docs and devs
+.diff/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+.ipynb_checkpoints
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+eggs/
+*.egg-info/
+*.egg

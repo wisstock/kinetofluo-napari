@@ -1,0 +1,15 @@
+name: kinetofluo-napari
+contributions:
+  commands:
+    - id: kinetofluo-napari.stack_preprocessing
+      title: Stack preprocessing
+      python_name: kinetofluo_napari._widget:stack_preprocessing
+    - id: kinetofluo-napari.cell_detector
+      title: Cells detection
+      python_name: kinetofluo_napari._widget:cell_detector
+
+  widgets:
+    - command: kinetofluo-napari.stack_preprocessing
+      display_name: Stack preprocessing
+    - command: kinetofluo-napari.cell_detector
+      display_name: Cells detection
