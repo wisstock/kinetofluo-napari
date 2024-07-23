@@ -26,8 +26,8 @@ from skimage import measure
 from skimage import restoration
 from skimage import segmentation
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvas
+# import matplotlib.pyplot as plt
+# from matplotlib.backends.backend_qt5agg import FigureCanvas
 
 
 @magic_factory(call_button='Preprocess stack',)
@@ -149,8 +149,9 @@ def cell_detector(viewer: Viewer, trans_img:Image, DAPI_img:Image,
 
 
 @magic_factory(call_button='Detect nucleus',)
-def nucl_detector(viewer: Viewer, DAPI_img:Image, cell_mask:Labels,
-                  nucleus_filtering_footprint:int=1):
+def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labels,
+                  nucleus_filtering_footprint:int=0,
+                  nucleus_extension_footprint:int=0):
     if input is not None:
         def _save_mask(params):
             img = params[0]
@@ -162,7 +163,7 @@ def nucl_detector(viewer: Viewer, DAPI_img:Image, cell_mask:Labels,
     
     @thread_worker(connect={'yielded':_save_mask})
     def _nucl_detector():
-        dapi_img = DAPI_img.data
+        dapi_img = np.add(DAPI_img.data, DRAQ_img.data)
         if dapi_img.ndim == 3:
             filtering_mask = cell_mask.data != 0
 
@@ -186,8 +187,12 @@ def nucl_detector(viewer: Viewer, DAPI_img:Image, cell_mask:Labels,
                 one_cell_mask = one_cell_int_to_vol > filters.threshold_otsu(one_cell_int_to_vol)
                 nucl_mask[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]] = one_cell_mask
 
-            nucl_mask = morphology.opening(nucl_mask,
-                                           footprint=morphology.disk(nucleus_filtering_footprint))
+            if nucleus_filtering_footprint != 0 :
+                nucl_mask = morphology.opening(nucl_mask,
+                                            footprint=morphology.disk(nucleus_filtering_footprint))
+            if nucleus_extension_footprint != 0:
+                nucl_mask = morphology.dilation(nucl_mask, footprint=morphology.disk(nucleus_extension_footprint))
+
             nucl_labels, nucl_num = ndi.label(nucl_mask)
             show_info(f'{DAPI_img.name}: Detected {nucl_num} nucleus')
 
@@ -199,19 +204,24 @@ def nucl_detector(viewer: Viewer, DAPI_img:Image, cell_mask:Labels,
 
 
 @magic_factory(call_button='Mark species',)
-def species_annotator(viewer: Viewer, base_img: Image):
+def species_annotator(viewer: Viewer, base_img: Image, sp_labels:list=['A','B','C']):
     COLOR_CYCLE = ['#FF0000',
                    '#008000',
                    '#0000FF',
                    '#FFFF00',
                    '#FF00FF']
     
-    labels = ['R','G','B','Y','F']
+    if len(sp_labels) > 5:
+        raise ValueError('Too many species, 5 or less is recommended!')
+    else:
+        labels = sp_labels
+        c_cycle = COLOR_CYCLE[:len(sp_labels)+1]
 
     points_layer = viewer.add_points(name=f'{base_img.name}_sp_points',
         ndim=2,
         property_choices={'label': labels},
         edge_color='label',
+        text={'string':'label', 'size':20, 'color':'black'},
         edge_color_cycle=COLOR_CYCLE,
         symbol='o',
         face_color='label',
@@ -225,15 +235,10 @@ def species_annotator(viewer: Viewer, base_img: Image):
     def next_on_click(layer, event):
         """Mouse click binding to advance the label when a point is added"""
         if layer.mode == 'add':
-            # By default, napari selects the point that was just added.
-            # Disable that behavior, as the highlight gets in the way
-            # and also causes next_label to change the color of the
-            # point that was just added.
             layer.selected_data = set()
 
-    @viewer.bind_key('.')
+    @viewer.bind_key('.', overwrite=True)
     def next_label(event):
-        """Keybinding to advance to the next label with wraparound"""
         current_properties = points_layer.current_properties
         current_label = current_properties['label'][0]
         ind = list(labels).index(current_label)
@@ -242,10 +247,10 @@ def species_annotator(viewer: Viewer, base_img: Image):
         current_properties['label'] = np.array([new_label])
         points_layer.current_properties = current_properties
         points_layer.refresh_colors()
+        points_layer.refresh_text()
 
-    @viewer.bind_key(',')
+    @viewer.bind_key(',', overwrite=True)
     def prev_label(event):
-        """Keybinding to decrement to the previous label with wraparound"""
         current_properties = points_layer.current_properties
         current_label = current_properties['label'][0]
         ind = list(labels).index(current_label)
@@ -255,8 +260,8 @@ def species_annotator(viewer: Viewer, base_img: Image):
         current_properties['label'] = np.array([new_label])
         points_layer.current_properties = current_properties
         points_layer.refresh_colors()
+        points_layer.refresh_text()
 
-    # points_layer.border_color_mode = 'cycle'
     points_layer.mouse_drag_callbacks.append(next_on_click)
 
 
@@ -268,7 +273,10 @@ def save_nucl_df(nucleus_img:Image,
     output_data_frame = pd.DataFrame({'id':[],
                                       'cell':[],
                                       'sp':[],
-                                      'int':[]})
+                                      'cell_coord':[],
+                                      'nucl_sum_int':[],
+                                      'cyto_mean_int':[],
+                                      'nucl_sum_int_corr':[]})
 
     sp_list = sp_markers.properties['label']
     sp_coord = sp_markers.data
@@ -284,22 +292,32 @@ def save_nucl_df(nucleus_img:Image,
             one_point_coord = sp_coord[sp_i]
             if one_cell_box[0] < one_point_coord[0] < one_cell_box[2] and one_cell_box[1] < one_point_coord[1] < one_cell_box[3]:
                 one_cell_sp = sp_list[sp_i]
-            else:
-                one_cell_sp = 'NA'
+                one_cell_coord = one_point_coord
+                print(sp_i, one_cell_sp)
+                break
+            one_cell_sp = 'NA'
+            one_cell_coord = 'NA'
 
         one_cell_mask = c_mask == cell_region.label
+
         one_nucl_mask = np.copy(n_mask)
         one_nucl_mask[~one_cell_mask] = 0
-        one_cell_int = np.sum(img_data, where=one_nucl_mask)
+        one_nucl_int = np.sum(img_data, where=one_nucl_mask)
 
-        cell_row = [nucleus_img.name, cell_region.label, one_cell_sp, one_cell_int]
+        one_cytoplasm_mask = np.copy(one_cell_mask)
+        one_cytoplasm_mask[one_nucl_mask] = 0
+        one_cytoplasm_int = np.mean(img_data, where=one_cytoplasm_mask, dtype=type(one_nucl_int))
+
+        one_nucl_int_corr = one_nucl_int - one_cytoplasm_int
+
+        cell_row = [nucleus_img.name, cell_region.label, one_cell_sp, str(one_cell_coord), one_nucl_int, one_cytoplasm_int, one_nucl_int_corr]
         output_data_frame.loc[len(output_data_frame.index)] = cell_row
 
         output_data_frame.to_csv(os.path.join(saving_path, f'{nucleus_img.name}_nucl_df.csv'))
+        show_info(f'{nucleus_img.name}: nucleus int data frame saved')
 
 
 @magic_factory(call_button='Print fetures',)
 def print_annotator(viewer: Viewer, point:Points):
-    print(point.properties)
     print(point.data)
     print(point.features)

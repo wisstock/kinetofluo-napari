@@ -16,9 +16,9 @@ contributions:
     - id: kinetofluo-napari.save_nucl_df
       title: Save nucleus data frame
       python_name: kinetofluo_napari._widget:save_nucl_df
-    - id: kinetofluo-napari.print_annotator
-      title: Debug of annotation
-      python_name: kinetofluo_napari._widget:print_annotator
+    # - id: kinetofluo-napari.print_annotator
+    #   title: Debug of annotation
+    #   python_name: kinetofluo_napari._widget:print_annotator
 
   widgets:
     - command: kinetofluo-napari.stack_preprocessing
@@ -31,5 +31,5 @@ contributions:
       display_name: Sp. annotation
     - command: kinetofluo-napari.save_nucl_df
       display_name: Save nucleus data frame
-    - command: kinetofluo-napari.print_annotator
-      display_name: Debug annotation
+    # - command: kinetofluo-napari.print_annotator
+    #   display_name: Debug annotation
