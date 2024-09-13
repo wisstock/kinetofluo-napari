@@ -151,7 +151,8 @@ def cell_detector(viewer: Viewer, trans_img:Image, DAPI_img:Image,
 @magic_factory(call_button='Detect nucleus',)
 def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labels,
                   nucleus_filtering_footprint:int=0,
-                  nucleus_extension_footprint:int=0):
+                  nucleus_extension_footprint:int=0,
+                  nucleus_erosion_footprint:int=0):
     if input is not None:
         def _save_mask(params):
             img = params[0]
@@ -192,6 +193,8 @@ def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labe
                                             footprint=morphology.disk(nucleus_filtering_footprint))
             if nucleus_extension_footprint != 0:
                 nucl_mask = morphology.dilation(nucl_mask, footprint=morphology.disk(nucleus_extension_footprint))
+            if nucleus_erosion_footprint != 0:
+                nucl_mask = morphology.erosion(nucl_mask, footprint=morphology.disk(nucleus_extension_footprint))
 
             nucl_labels, nucl_num = ndi.label(nucl_mask)
             show_info(f'{DAPI_img.name}: Detected {nucl_num} nucleus')
