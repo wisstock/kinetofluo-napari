@@ -194,7 +194,7 @@ def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labe
             if nucleus_extension_footprint != 0:
                 nucl_mask = morphology.dilation(nucl_mask, footprint=morphology.disk(nucleus_extension_footprint))
             if nucleus_erosion_footprint != 0:
-                nucl_mask = morphology.erosion(nucl_mask, footprint=morphology.disk(nucleus_extension_footprint))
+                nucl_mask = morphology.erosion(nucl_mask, footprint=morphology.disk(nucleus_erosion_footprint))
 
             nucl_labels, nucl_num = ndi.label(nucl_mask)
             show_info(f'{DAPI_img.name}: Detected {nucl_num} nucleus')
