@@ -20,6 +20,8 @@ from scipy import ndimage as ndi
 from scipy import stats
 from scipy import signal
 
+from sklearn import preprocessing
+
 from skimage import filters
 from skimage import morphology
 from skimage import measure
@@ -32,10 +34,10 @@ from skimage import segmentation
 
 @magic_factory(call_button='Preprocess stack',)
 def stack_preprocessing(viewer: Viewer, img:Image,
-                        median_filter:bool=False, median_kernel:int=3,  #gaussian_blur:bool=True, gaussian_sigma=0.75,
+                        median_filter:bool=False, median_kernel:int=3,
                         background_substraction:bool=True,
-                        drop_slices:bool=True,
-                        slice_range:list=[1, 6]):
+                        drop_slices:bool=False,
+                        slice_range:list=[0, 10]):
     if input is not None:
         def _save_ch(params):
             img = params[0]
@@ -84,8 +86,9 @@ def stack_preprocessing(viewer: Viewer, img:Image,
 def cell_detector(viewer: Viewer, trans_img:Image, DAPI_img:Image,
                   detection_method:str='intensity',
                   trans_filtering_kernel:int=5,
-                  DAPI_intensity_filtering:int=10,
-                  DAPI_volumetric_threshold:int=4):
+                  DAPI_intensity_filtering:int=15,
+                  DAPI_volumetric_threshold:int=4,
+                  cell_extension_footprint:int=0):
     if input is not None:
         def _save_mask(params):
             img = params[0]
@@ -121,8 +124,6 @@ def cell_detector(viewer: Viewer, trans_img:Image, DAPI_img:Image,
         elif detection_method == 'volumetric':
             # volumetric debris filtering
             ctrl_fluo_volumetric_mask = DAPI_img.data > filters.threshold_otsu(DAPI_img.data)
-            # ctrl_fluo_volumetric_mask = morphology.opening(ctrl_fluo_volumetric_mask,
-            #                                                footprint=morphology.disk(2)) 
             ctrl_fluo_volumetric_img = np.sum(ctrl_fluo_volumetric_mask, axis=0)
             ctrl_fluo_mask = ctrl_fluo_volumetric_img > DAPI_volumetric_threshold
             ctrl_fluo_mask = morphology.dilation(ctrl_fluo_mask,
@@ -139,6 +140,9 @@ def cell_detector(viewer: Viewer, trans_img:Image, DAPI_img:Image,
         fin_mask = segmentation.clear_border(fin_mask)  # borders cleaning
         fin_mask = morphology.opening(fin_mask, footprint=morphology.disk(5))  # rejection of DAPI+DRAW mask artifacts
         fin_mask = ndi.binary_fill_holes(fin_mask)
+
+        if cell_extension_footprint != 0:
+            fin_mask = morphology.dilation(fin_mask, footprint=morphology.disk(cell_extension_footprint))
 
         cells_labels, cells_num = ndi.label(fin_mask)
         show_info(f'{trans_img.name}: Detected {cells_num} cells')
@@ -203,6 +207,82 @@ def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labe
     _nucl_detector()
 
 
+@magic_factory(call_button='Segment compartments',)
+def comp_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labels,
+                  n_class:int=2):
+    if input is not None:
+        def _save_comp_masks(params):
+            img_dapi_l = params[0]
+            img_dapi_h = params[1]
+            img_name = params[2]
+            try: 
+                viewer.layers[f'{img_name}_low'].data = img_dapi_l
+            except KeyError:
+                viewer.add_labels(img_dapi_l, name=f'{img_name}_low', opacity=0.5)
+            try: 
+                viewer.layers[f'{img_name}_high'].data = img_dapi_h
+            except KeyError:
+                viewer.add_labels(img_dapi_h, name=f'{img_name}_high', opacity=0.5)
+
+        @thread_worker(connect={'yielded':_save_comp_masks})
+        def _comp_detector():
+            dapi_img_input = np.sum(DAPI_img.data, axis=0, dtype=np.float64)
+            draq_img_input = np.sum(DRAQ_img.data, axis=0, dtype=np.float64)
+
+            dapi_l_lab = np.zeros_like(dapi_img_input, dtype=bool)
+            dapi_h_lab = np.zeros_like(dapi_img_input, dtype=bool)
+
+            for cell_region in measure.regionprops(cell_mask.data):
+                one_cell_box = cell_region.bbox
+                dapi_img = dapi_img_input[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]]
+                draq_img = draq_img_input[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]]
+                one_cell_mask = cell_mask.data[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]] != 0
+
+                dapi_img = dapi_img - np.mean(dapi_img, where=~one_cell_mask)  # background extraction
+                dapi_img[~one_cell_mask] = np.mean(dapi_img, where=~one_cell_mask)  # extracellular px masking
+                
+                draq_img = draq_img - np.mean(draq_img, where=~one_cell_mask)  # background extraction
+                draq_img[~one_cell_mask] = np.mean(draq_img, where=~one_cell_mask)  # extracellular px masking
+
+                scaler = preprocessing.MinMaxScaler(feature_range=(0, 1), clip=True)  # naive 0-1 scaler, sensitive to outliers
+                # scaler = preprocessing.RobustScaler(with_centering=True, with_scaling=True, quantile_range=(2.0, 98.0))
+
+                dapi_norm = scaler.fit_transform(dapi_img.reshape(-1,1)).reshape(dapi_img.shape)
+                draq_norm = scaler.fit_transform(draq_img.reshape(-1,1)).reshape(draq_img.shape)   
+
+                qd_rel = np.divide(draq_norm, dapi_norm, out=np.zeros_like(draq_norm), where=dapi_norm!=0)
+                qd_rel = filters.median(qd_rel)
+                qd = draq_img * qd_rel
+                dq_rel = np.divide(dapi_norm, draq_norm, out=np.zeros_like(dapi_norm), where=draq_norm!=0)
+                dq_rel = filters.median(dq_rel)
+                dq = dapi_img * dq_rel
+
+                qd_norm = scaler.fit_transform(qd.reshape(-1,1)).reshape(qd.shape)
+                dq_norm = scaler.fit_transform(dq.reshape(-1,1)).reshape(dq.shape)
+
+                # qd_mask = morphology.opening(qd_norm > filters.threshold_otsu(qd_norm))
+                # dq_mask = morphology.opening(dq_norm > filters.threshold_otsu(dq_norm))
+                qd_mask = qd_norm > np.max(filters.threshold_multiotsu(qd_norm,classes = n_class))
+                dq_mask = dq_norm > np.max(filters.threshold_multiotsu(dq_norm,classes = n_class))
+
+                q_mask = np.copy(qd_mask)
+                q_mask[dq_mask] = False
+                d_mask = np.copy(dq_mask)
+                d_mask[qd_mask] = False
+                # overlap_mask = (qd_mask & dq_mask)
+
+                overlap_percent = np.sum((qd_mask & dq_mask)) / np.sum((qd_mask | dq_mask))
+
+                show_info(f'Cell {cell_region.label}: compartments overlap {overlap_percent}%')
+
+                dapi_l_lab[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]] = dq_mask
+                dapi_h_lab[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]] = qd_mask
+
+            yield (dapi_l_lab, dapi_h_lab, f'{DAPI_img.name}_compartments_mask')
+
+        _comp_detector()
+
+
 @magic_factory(call_button='Mark species',)
 def species_annotator(viewer: Viewer, base_img: Image, sp_labels:list=['A','B','C']):
     COLOR_CYCLE = ['#FF0000',
@@ -215,25 +295,22 @@ def species_annotator(viewer: Viewer, base_img: Image, sp_labels:list=['A','B','
         raise ValueError('Too many species, 5 or less is recommended!')
     else:
         labels = sp_labels
-        c_cycle = COLOR_CYCLE[:len(sp_labels)+1]
 
     points_layer = viewer.add_points(name=f'{base_img.name}_sp_points',
-        ndim=2,
-        property_choices={'label': labels},
-        edge_color='label',
-        text={'string':'label', 'size':20, 'color':'black'},
-        edge_color_cycle=COLOR_CYCLE,
-        symbol='o',
-        face_color='label',
-        face_color_cycle=COLOR_CYCLE,
-        edge_width=0.05,  # fraction of point size
-        size=15,
-    )
+                                     ndim=2,
+                                     property_choices={'label': labels},
+                                     edge_color='label',
+                                     text={'string':'label', 'size':20, 'color':'black'},
+                                     edge_color_cycle=COLOR_CYCLE,
+                                     symbol='o',
+                                     face_color='label',
+                                     face_color_cycle=COLOR_CYCLE,
+                                     edge_width=0.05,
+                                     size=15)
     points_layer.edge_color_mode = 'cycle'
     points_layer.mode = 'add'
 
     def next_on_click(layer, event):
-        """Mouse click binding to advance the label when a point is added"""
         if layer.mode == 'add':
             layer.selected_data = set()
 
@@ -285,33 +362,36 @@ def save_nucl_df(nucleus_img:Image,
     c_mask = cell_mask.data
     n_mask = nucleus_mask.data != 0
 
-    for cell_region in measure.regionprops(c_mask):
-        one_cell_box = cell_region.bbox
+    if c_mask.ndim != 2 or n_mask.ndim != 2:
+        raise ValueError('Incorrect mask shape!')
+    else:
+        for cell_region in measure.regionprops(c_mask):
+            one_cell_box = cell_region.bbox
 
-        for sp_i in range(len(sp_list)):
-            one_point_coord = sp_coord[sp_i]
-            if one_cell_box[0] < one_point_coord[0] < one_cell_box[2] and one_cell_box[1] < one_point_coord[1] < one_cell_box[3]:
-                one_cell_sp = sp_list[sp_i]
-                one_cell_coord = one_point_coord
-                print(sp_i, one_cell_sp)
-                break
-            one_cell_sp = 'NA'
-            one_cell_coord = 'NA'
+            for sp_i in range(len(sp_list)):
+                one_point_coord = sp_coord[sp_i]
+                if one_cell_box[0] < one_point_coord[0] < one_cell_box[2] and one_cell_box[1] < one_point_coord[1] < one_cell_box[3]:
+                    one_cell_sp = sp_list[sp_i]
+                    one_cell_coord = str([int(one_point_coord[0]), int(one_point_coord[-1])])
+                    print(sp_i, one_cell_sp)
+                    break
+                one_cell_sp = 'NA'
+                one_cell_coord = 'NA'
 
-        one_cell_mask = c_mask == cell_region.label
+            one_cell_mask = c_mask == cell_region.label
 
-        one_nucl_mask = np.copy(n_mask)
-        one_nucl_mask[~one_cell_mask] = 0
-        one_nucl_int = np.sum(img_data, where=one_nucl_mask)
+            one_nucl_mask = np.copy(n_mask)
+            one_nucl_mask[~one_cell_mask] = 0
+            one_nucl_int = np.sum(img_data, where=one_nucl_mask)
 
-        one_cytoplasm_mask = np.copy(one_cell_mask)
-        one_cytoplasm_mask[one_nucl_mask] = 0
-        one_cytoplasm_int = np.mean(img_data, where=one_cytoplasm_mask, dtype=type(one_nucl_int))
+            one_cytoplasm_mask = np.copy(one_cell_mask)
+            one_cytoplasm_mask[one_nucl_mask] = 0
+            one_cytoplasm_int = np.mean(img_data, where=one_cytoplasm_mask, dtype=type(one_nucl_int))
 
-        one_nucl_int_corr = one_nucl_int - one_cytoplasm_int
+            one_nucl_int_corr = one_nucl_int - one_cytoplasm_int
 
-        cell_row = [nucleus_img.name, cell_region.label, one_cell_sp, str(one_cell_coord), one_nucl_int, one_cytoplasm_int, one_nucl_int_corr]
-        output_data_frame.loc[len(output_data_frame.index)] = cell_row
+            cell_row = [nucleus_img.name, cell_region.label, one_cell_sp, one_cell_coord, one_nucl_int, one_cytoplasm_int, one_nucl_int_corr]
+            output_data_frame.loc[len(output_data_frame.index)] = cell_row
 
         output_data_frame.to_csv(os.path.join(saving_path, f'{nucleus_img.name}_nucl_df.csv'))
         show_info(f'{nucleus_img.name}: nucleus int data frame saved')

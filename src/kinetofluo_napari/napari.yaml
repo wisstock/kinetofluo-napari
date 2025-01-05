@@ -10,6 +10,9 @@ contributions:
     - id: kinetofluo-napari.nucl_detector
       title: Nucleus detection
       python_name: kinetofluo_napari._widget:nucl_detector
+    - id: kinetofluo-napari.comp_detector
+      title: DNA-containing compartments segmentation
+      python_name: kinetofluo_napari._widget:comp_detector
     - id: kinetofluo-napari.species_annotator
       title: Sp. annotation
       python_name: kinetofluo_napari._widget:species_annotator
@@ -27,6 +30,8 @@ contributions:
       display_name: Cells detection
     - command: kinetofluo-napari.nucl_detector
       display_name: Nucleus detection
+    - command: kinetofluo-napari.comp_detector
+      display_name: Compartments segmentation
     - command: kinetofluo-napari.species_annotator
       display_name: Sp. annotation
     - command: kinetofluo-napari.save_nucl_df
