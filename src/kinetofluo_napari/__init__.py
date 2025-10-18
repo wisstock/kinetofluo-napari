@@ -5,6 +5,8 @@ from ._widget import comp_detector
 from ._widget import species_annotator
 from ._widget import print_annotator
 from ._widget import save_nucl_df
+from ._widget import save_kDNA_df
+from ._widget import save_KINnuclDNA_df
 
 __all__ = ['stack_preprocessing',
            'cell_detector',
@@ -12,4 +14,6 @@ __all__ = ['stack_preprocessing',
            'species_annotator',
            'print_annotator',
            'save_nucl_df',
-           'comp_detector']
+           'comp_detector',
+           'save_kDNA_df',
+           'save_KINnuclDNA_df']

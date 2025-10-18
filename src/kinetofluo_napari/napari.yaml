@@ -19,6 +19,12 @@ contributions:
     - id: kinetofluo-napari.save_nucl_df
       title: Save nucleus data frame
       python_name: kinetofluo_napari._widget:save_nucl_df
+    - id: kinetofluo-napari.save_kDNA_df
+      title: Save kDNA data frame
+      python_name: kinetofluo_napari._widget:save_kDNA_df
+    - id: kinetofluo-napari.save_KINnuclDNA_df
+      title: Save KINETO nucleus data frame
+      python_name: kinetofluo_napari._widget:save_KINnuclDNA_df
     # - id: kinetofluo-napari.print_annotator
     #   title: Debug of annotation
     #   python_name: kinetofluo_napari._widget:print_annotator
@@ -36,5 +42,9 @@ contributions:
       display_name: Sp. annotation
     - command: kinetofluo-napari.save_nucl_df
       display_name: Save nucleus data frame
+    - command: kinetofluo-napari.save_kDNA_df
+      display_name: Save kDNA data frame
+    - command: kinetofluo-napari.save_KINnuclDNA_df
+      display_name: Save KINETO nucleus data frame
     # - command: kinetofluo-napari.print_annotator
     #   display_name: Debug annotation
