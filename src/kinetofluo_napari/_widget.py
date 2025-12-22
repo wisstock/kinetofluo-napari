@@ -186,8 +186,8 @@ def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labe
 
             # masking loop
             nucl_mask = np.zeros_like(dapi_sum)
-            print(cell_mask.data.shape)
-            print(nucl_mask.shape)
+            show_info(f'{DAPI_img.name}: Detecting nucleus' + cell_mask.data.shape  + nucl_mask.shape)
+            
             for cell_region in measure.regionprops(cell_mask.data):
                 one_cell_box = cell_region.bbox
                 one_cell_int_to_vol = dapi_int_to_vol[one_cell_box[0]:one_cell_box[2],one_cell_box[1]:one_cell_box[3]]
@@ -482,27 +482,22 @@ def save_nucl_df(nucleus_img:Image,
         output_data_frame.to_csv(os.path.join(saving_path, f'{nucleus_img.name}_nucl_df.csv'))
         show_info(f'{nucleus_img.name}: nucleus int data frame saved')
 
+
 @magic_factory(call_button='Save kDNA data',)
 def save_kDNA_df(nucleus_img:Image,
-                      cell_mask: Labels, nucleus_mask:Labels, kDNA_mask:Labels,
-                    #####For compartment measurements
-                      
-                      #nuclDNA_mask:Labels,
-                    #####For compartment measurements
-                      sp_markers:Points,
-                      saving_path:pathlib.Path = os.getcwd()):
+                 cell_mask: Labels, 
+                 nucleus_mask:Labels, kDNA_mask:Labels,
+                 # For compartment measurements
+                 sp_markers:Points,
+                 saving_path:pathlib.Path = os.getcwd()):
     output_data_frame = pd.DataFrame({'id':[],
                                       'cell':[],
                                       'sp':[],
                                       'cell_coord':[],
                                       'cyto_mean_int':[],
-                                    
                                       #####For compartment measurements
                                       'one_kDNA_int':[],
-                                      #'one_nuclDNA_int':[],
-                                      'one_kDNA_int_corr':[]#,
-                                      #'one_nuclDNA_int_corr':[]
-                                      })
+                                      'one_kDNA_int_corr':[]})
 
     sp_list = sp_markers.properties['label']
     sp_coord = sp_markers.data
@@ -566,25 +561,21 @@ def save_kDNA_df(nucleus_img:Image,
 
 @magic_factory(call_button='Save kinet nuclDNA data',)
 def save_KINnuclDNA_df(nucleus_img:Image,
-                      cell_mask: Labels, nucleus_mask:Labels,
-                    #####For compartment measurements
-                      
-                      nuclDNA_mask:Labels,
-                    #####For compartment measurements
-                      sp_markers:Points,
-                      saving_path:pathlib.Path = os.getcwd()):
+                       cell_mask: Labels,
+                       nucleus_mask:Labels,
+                       # For compartment measurements
+                       nuclDNA_mask:Labels,
+                       # For compartment measurements
+                       sp_markers:Points,
+                       saving_path:pathlib.Path = os.getcwd()):
     output_data_frame = pd.DataFrame({'id':[],
                                       'cell':[],
                                       'sp':[],
                                       'cell_coord':[],
                                       'cyto_mean_int':[],
-                                    
                                       #####For compartment measurements
-                                      
                                       'one_nuclDNA_int':[],
-                                      
-                                      'one_nuclDNA_int_corr':[]
-                                      })
+                                      'one_nuclDNA_int_corr':[]})
 
     sp_list = sp_markers.properties['label']
     sp_coord = sp_markers.data
