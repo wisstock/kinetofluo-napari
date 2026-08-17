@@ -15,6 +15,38 @@ The standard analysis workflow with `kinetofluo-napari` typically consists of th
 
 ---
 
+## Installation
+
+It is recommended to use a clean `conda` environment for the installation.
+
+1. Create and activate a new virtual environment:
+
+    ```bash
+    conda create -n kineto-env python
+    conda activate kineto-napari-env
+    ```
+
+2. Install `napari`:
+
+    ```bash
+    pip install "napari[all]"
+    ```
+
+3. Clone the repo:
+
+    ```bash
+    git clone https://github.com/wisstock/kinetofluo-napari.git
+    ```
+
+4. Install the plugin:
+
+    ```bash
+    cd /path/to/repo/kinetofluo-napari
+    pip install .
+    ```
+
+---
+
 ## Widget and Parameter Description
 
 ### 1. Preprocess stack
