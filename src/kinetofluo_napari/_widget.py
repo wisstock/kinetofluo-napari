@@ -186,7 +186,7 @@ def nucl_detector(viewer: Viewer, DRAQ_img:Image, DAPI_img:Image, cell_mask:Labe
 
             # masking loop
             nucl_mask = np.zeros_like(dapi_sum)
-            show_info(f'{DAPI_img.name}: Detecting nucleus' + cell_mask.data.shape  + nucl_mask.shape)
+            #show_info(f'{DAPI_img.name}: Detecting nucleus' + {cell_mask.data.shape}  + {nucl_mask.shape})
             
             for cell_region in measure.regionprops(cell_mask.data):
                 one_cell_box = cell_region.bbox
@@ -356,15 +356,15 @@ def species_annotator(viewer: Viewer, base_img: Image, sp_labels:list=['Sros','C
     points_layer = viewer.add_points(name=f'{base_img.name}_sp_points',
                                      ndim=2,
                                      property_choices={'label': labels},
-                                     edge_color='label',
+                                     border_color='label',
                                      text={'string':'label', 'size':20, 'color':'black'},
-                                     edge_color_cycle=COLOR_CYCLE,
+                                     border_color_cycle=COLOR_CYCLE,
                                      symbol='o',
                                      face_color='label',
                                      face_color_cycle=COLOR_CYCLE,
-                                     edge_width=0.05,
+                                     border_width=0.05,
                                      size=15)
-    points_layer.edge_color_mode = 'cycle'
+    points_layer.border_color_mode = 'cycle'
     points_layer.mode = 'add'
 
     def next_on_click(layer, event):
