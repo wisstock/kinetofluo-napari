@@ -23,7 +23,7 @@ It is recommended to use a clean `conda` environment for the installation.
 
     ```bash
     conda create -n kineto-env python
-    conda activate kineto-napari-env
+    conda activate kineto-env
     ```
 
 2. Install `napari`:
@@ -44,6 +44,12 @@ It is recommended to use a clean `conda` environment for the installation.
     cd /path/to/repo/kinetofluo-napari
     pip install .
     ```
+    May also need to install scikit
+
+   ```
+      pip install scikit-learn
+   ```
+5. Edit widget.py file in src dir if you need to adjust/add functions. After editing, reinstall plugin (step 4) and restart napari
 
 ---
 
